@@ -9,7 +9,7 @@ A mobile app (Android and iOS) that reminds you to drink water and tracks your d
 - **Quick logging**: one-tap small glass / glass / bottle (sizes adjustable) or a custom amount, with a progress ring for the current period.
 - **History**: last-7-days chart, streak (in days, weeks, or months), 30-day average, and recent periods.
 
-Reminders are scheduled up to two weeks ahead (about four days on iOS, which allows only 64 pending notifications) and topped up every time the app is opened.
+Reminders are scheduled up to two weeks ahead (about four days on iOS, which allows only 64 pending notifications). They're topped up every time the app is opened, and by a background task (`src/lib/reminder-refresh.ts`) that the OS runs every few hours while reminders are on. The OS won't run it if the app was force-quit (swiped away on iOS, "Force stop" on Android) or background activity is turned off, so reminders can still run out in those cases.
 
 All data is stored on the device.
 

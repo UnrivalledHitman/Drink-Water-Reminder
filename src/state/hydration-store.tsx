@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   createContext,
   useCallback,
@@ -19,9 +18,9 @@ import {
   type HydrationData,
   type Settings,
 } from '@/lib/hydration';
+import { setBackgroundRefresh } from '@/lib/reminder-refresh';
 import { syncReminders } from '@/lib/reminders';
-
-const STORAGE_KEY = 'hydration-data-v1';
+import { loadData, saveData } from '@/lib/storage';
 
 type HydrationStore = {
   data: HydrationData;
@@ -38,32 +37,6 @@ function currentGoal(settings: Settings): Goal {
   return { period: settings.goalPeriod, ml: settings.goalMl };
 }
 
-function emptyData(): HydrationData {
-  return { settings: DEFAULT_SETTINGS, log: {}, goalOnDay: {} };
-}
-
-async function load(): Promise<HydrationData> {
-  try {
-    const raw = await AsyncStorage.getItem(STORAGE_KEY);
-    if (!raw) return emptyData();
-    const saved = JSON.parse(raw) as Partial<HydrationData> & {
-      /** Before weekly/monthly goals, only daily goals were recorded */
-      goalByDay?: Record<string, number>;
-    };
-    const goalOnDay: Record<string, Goal> = { ...saved.goalOnDay };
-    for (const [day, ml] of Object.entries(saved.goalByDay ?? {})) {
-      goalOnDay[day] ??= { period: 'day', ml };
-    }
-    return {
-      settings: { ...DEFAULT_SETTINGS, ...saved.settings },
-      log: saved.log ?? {},
-      goalOnDay,
-    };
-  } catch {
-    return emptyData();
-  }
-}
-
 export function HydrationProvider({
   children,
   onLoaded,
@@ -75,7 +48,7 @@ export function HydrationProvider({
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
-    load().then(setData);
+    loadData().then(setData);
   }, []);
 
   useEffect(() => {
@@ -83,7 +56,7 @@ export function HydrationProvider({
   }, [data, onLoaded]);
 
   useEffect(() => {
-    if (data) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    if (data) saveData(data);
   }, [data]);
 
   // Reschedule reminders when their settings change, when the goal for the
@@ -107,6 +80,15 @@ export function HydrationProvider({
       pausedUntil === null ? null : new Date(pausedUntil)
     ).catch((error) => console.warn('Could not schedule reminders', error));
   }, [reminderKey]);
+
+  // While reminders are on, a background task keeps topping them up.
+  const remindersEnabled = data?.settings.remindersEnabled;
+  useEffect(() => {
+    if (remindersEnabled === undefined) return;
+    setBackgroundRefresh(remindersEnabled).catch((error) =>
+      console.warn('Could not update background refresh', error)
+    );
+  }, [remindersEnabled]);
 
   // Keep "today" correct across midnight and after the app was in the background.
   useEffect(() => {

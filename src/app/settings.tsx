@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Linking, StyleSheet, Switch, TextInput, View } from 'react-native';
 
 import { Button, Card, Chip, controlStyles, Screen, Stepper } from '@/components/controls';
@@ -16,6 +16,7 @@ import {
   REMINDER_INTERVALS,
   reminderOffsets,
 } from '@/lib/hydration';
+import { backgroundRefreshAvailable } from '@/lib/reminder-refresh';
 import { remindersSupported, requestPermission, sendTestReminder } from '@/lib/reminders';
 import { useHydration } from '@/state/hydration-store';
 
@@ -43,6 +44,10 @@ export default function SettingsScreen() {
   const { settings } = data;
   const theme = useTheme();
   const [weight, setWeight] = useState(settings.weightKg ? String(settings.weightKg) : '');
+  const [backgroundOk, setBackgroundOk] = useState(true);
+  useEffect(() => {
+    backgroundRefreshAvailable().then(setBackgroundOk, () => setBackgroundOk(false));
+  }, []);
 
   const weightKg = Number.parseInt(weight, 10);
   const weightValid = weightKg >= 20 && weightKg <= 250;
@@ -156,6 +161,12 @@ export default function SettingsScreen() {
               start again {period === 'day' ? 'tomorrow' : `next ${info.noun}`}. Tap “I drank a glass” on a
               reminder to log {settings.cupSizes[1]} ml.
             </ThemedText>
+            {settings.remindersEnabled && !backgroundOk && (
+              <ThemedText type="small" style={{ color: theme.danger }}>
+                Background refresh is turned off for this app, so reminders can run out. Open the app
+                every few days, or allow background activity in your phone settings.
+              </ThemedText>
+            )}
             <Button label="Send a test reminder" variant="soft" onPress={testReminder} />
           </>
         ) : (

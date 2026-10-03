@@ -40,7 +40,8 @@
         {
           "color": "#1E88E5"
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "experiments": {
       "typedRoutes": true,
