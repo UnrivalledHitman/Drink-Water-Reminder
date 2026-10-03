@@ -4,10 +4,12 @@ A mobile app (Android and iOS) that reminds you to drink water and tracks your d
 
 ## Features
 
-- **Daily goal**: set it directly or calculate it from your weight (about 35 ml per kg).
-- **Reminders**: notifications every 30 min to 2 h between a start and end time, repeating daily even when the app is closed. Each reminder has **I drank a glass** and **Snooze 10 min** buttons.
-- **Quick logging**: one-tap small glass / glass / bottle (sizes adjustable) or a custom amount, with a progress ring.
-- **History**: last-7-days chart, day streak, 30-day average, and goal days.
+- **Daily, weekly, or monthly goal**: set it directly or calculate it from your weight (about 35 ml per kg a day). Weeks start on Monday; months follow the calendar.
+- **Reminders**: notifications every 30 min to 2 h between a start and end time, even when the app is closed. They pause once the goal for the current day/week/month is reached and resume when the next one starts. Each reminder has **I drank a glass** and **Snooze 10 min** buttons.
+- **Quick logging**: one-tap small glass / glass / bottle (sizes adjustable) or a custom amount, with a progress ring for the current period.
+- **History**: last-7-days chart, streak (in days, weeks, or months), 30-day average, and recent periods.
+
+Reminders are scheduled up to two weeks ahead (about four days on iOS, which allows only 64 pending notifications) and topped up every time the app is opened.
 
 All data is stored on the device.
 

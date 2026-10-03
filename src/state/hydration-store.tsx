@@ -13,7 +13,9 @@ import { AppState } from 'react-native';
 import {
   dateKey,
   DEFAULT_SETTINGS,
+  remindersPausedUntil,
   type Entry,
+  type Goal,
   type HydrationData,
   type Settings,
 } from '@/lib/hydration';
@@ -32,19 +34,30 @@ type HydrationStore = {
 
 const HydrationContext = createContext<HydrationStore | null>(null);
 
+function currentGoal(settings: Settings): Goal {
+  return { period: settings.goalPeriod, ml: settings.goalMl };
+}
+
 function emptyData(): HydrationData {
-  return { settings: DEFAULT_SETTINGS, log: {}, goalByDay: {} };
+  return { settings: DEFAULT_SETTINGS, log: {}, goalOnDay: {} };
 }
 
 async function load(): Promise<HydrationData> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return emptyData();
-    const saved = JSON.parse(raw) as Partial<HydrationData>;
+    const saved = JSON.parse(raw) as Partial<HydrationData> & {
+      /** Before weekly/monthly goals, only daily goals were recorded */
+      goalByDay?: Record<string, number>;
+    };
+    const goalOnDay: Record<string, Goal> = { ...saved.goalOnDay };
+    for (const [day, ml] of Object.entries(saved.goalByDay ?? {})) {
+      goalOnDay[day] ??= { period: 'day', ml };
+    }
     return {
       settings: { ...DEFAULT_SETTINGS, ...saved.settings },
       log: saved.log ?? {},
-      goalByDay: saved.goalByDay ?? {},
+      goalOnDay,
     };
   } catch {
     return emptyData();
@@ -73,22 +86,27 @@ export function HydrationProvider({
     if (data) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   }, [data]);
 
-  // Reschedule reminders whenever their settings change.
-  const settings = data?.settings;
-  const enabled = settings?.remindersEnabled;
-  const wake = settings?.wakeMinutes;
-  const sleep = settings?.sleepMinutes;
-  const interval = settings?.intervalMinutes;
+  // Reschedule reminders when their settings change, when the goal for the
+  // period is met (pausing them) or no longer met, and once a day to top them up.
+  const reminderKey = data
+    ? JSON.stringify([
+        data.settings.remindersEnabled,
+        data.settings.wakeMinutes,
+        data.settings.sleepMinutes,
+        data.settings.intervalMinutes,
+        remindersPausedUntil(data, now)?.getTime() ?? null,
+        dateKey(now),
+      ])
+    : null;
   useEffect(() => {
-    if (enabled === undefined || wake === undefined || sleep === undefined || !interval) return;
-    syncReminders({
-      ...DEFAULT_SETTINGS,
-      remindersEnabled: enabled,
-      wakeMinutes: wake,
-      sleepMinutes: sleep,
-      intervalMinutes: interval,
-    }).catch((error) => console.warn('Could not schedule reminders', error));
-  }, [enabled, wake, sleep, interval]);
+    if (!reminderKey) return;
+    const [remindersEnabled, wakeMinutes, sleepMinutes, intervalMinutes, pausedUntil] =
+      JSON.parse(reminderKey);
+    syncReminders(
+      { ...DEFAULT_SETTINGS, remindersEnabled, wakeMinutes, sleepMinutes, intervalMinutes },
+      pausedUntil === null ? null : new Date(pausedUntil)
+    ).catch((error) => console.warn('Could not schedule reminders', error));
+  }, [reminderKey]);
 
   // Keep "today" correct across midnight and after the app was in the background.
   useEffect(() => {
@@ -110,7 +128,7 @@ export function HydrationProvider({
       prev && {
         ...prev,
         log: { ...prev.log, [day]: [...(prev.log[day] ?? []), entry] },
-        goalByDay: { ...prev.goalByDay, [day]: prev.settings.goalMl },
+        goalOnDay: { ...prev.goalOnDay, [day]: currentGoal(prev.settings) },
       }
     );
     setNow(at);
@@ -129,9 +147,9 @@ export function HydrationProvider({
     setData((prev) => {
       if (!prev) return prev;
       const next = { ...prev, settings: { ...prev.settings, ...patch } };
-      // A goal change applies to today too.
-      if (patch.goalMl !== undefined) {
-        next.goalByDay = { ...prev.goalByDay, [dateKey(new Date())]: patch.goalMl };
+      // A goal change applies to the current period too.
+      if (patch.goalMl !== undefined || patch.goalPeriod !== undefined) {
+        next.goalOnDay = { ...prev.goalOnDay, [dateKey(new Date())]: currentGoal(next.settings) };
       }
       return next;
     });

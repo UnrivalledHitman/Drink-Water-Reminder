@@ -4,52 +4,97 @@ import { Card, Screen } from '@/components/controls';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
-import { addDays, currentStreak, dateKey, formatMl, goalForDay, totalMl } from '@/lib/hydration';
+import {
+  addDays,
+  currentStreak,
+  dailyTarget,
+  dateKey,
+  formatMl,
+  type GoalPeriod,
+  PERIOD_INFO,
+  periodGoal,
+  periodStart,
+  periodTotal,
+  totalMl,
+} from '@/lib/hydration';
 import { useHydration } from '@/state/hydration-store';
 
 const CHART_HEIGHT = 140;
+const RECENT_PERIODS: Record<GoalPeriod, number> = { day: 30, week: 8, month: 6 };
+
+function capitalize(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function periodLabel(start: Date, period: GoalPeriod) {
+  if (period === 'day') {
+    return start.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+  if (period === 'month') return start.toLocaleDateString([], { month: 'long', year: 'numeric' });
+  const end = addDays(start, 6);
+  const short = (date: Date) => date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  return `${short(start)} – ${short(end)}`;
+}
 
 export default function HistoryScreen() {
   const { data, now } = useHydration();
   const theme = useTheme();
+  const period = data.settings.goalPeriod;
+  const info = PERIOD_INFO[period];
 
-  const days = (count: number) =>
-    Array.from({ length: count }, (_, i) => {
-      const date = addDays(now, i - count + 1);
-      const key = dateKey(date);
-      return { date, key, total: totalMl(data.log[key]), goal: goalForDay(data, key) };
+  const week = Array.from({ length: 7 }, (_, i) => {
+    const date = addDays(now, i - 6);
+    return { date, key: dateKey(date), total: totalMl(data.log[dateKey(date)]), target: dailyTarget(data, date) };
+  });
+
+  const month = Array.from({ length: 30 }, (_, i) => totalMl(data.log[dateKey(addDays(now, -i))]));
+  const tracked = month.filter((total) => total > 0);
+  const average = tracked.length ? Math.round(tracked.reduce((a, b) => a + b, 0) / tracked.length) : 0;
+
+  // Most recent first: this period, then the ones before it.
+  const periods: { start: Date; total: number; goal: number }[] = [];
+  for (let date = now; periods.length < RECENT_PERIODS[period]; date = addDays(periodStart(date, period), -1)) {
+    periods.push({
+      start: periodStart(date, period),
+      total: periodTotal(data, date, period),
+      goal: periodGoal(data, date, period),
     });
+  }
+  const current = periods[0];
+  const goalPeriods = periods.filter((p) => p.total >= p.goal).length;
+  // Skip empty periods, but always show the current week or month.
+  const shownPeriods = periods.filter((p) => p.total > 0 || (p === current && period !== 'day'));
 
-  const week = days(7);
-  const month = days(30);
-  const tracked = month.filter((day) => day.total > 0);
-  const average = tracked.length
-    ? Math.round(tracked.reduce((sum, day) => sum + day.total, 0) / tracked.length)
-    : 0;
-  const goalDays = month.filter((day) => day.total >= day.goal).length;
   const streak = currentStreak(data, now);
-  const chartMax = Math.max(...week.map((day) => Math.max(day.total, day.goal)));
+  const chartMax = Math.max(1, ...week.map((day) => Math.max(day.total, day.target)));
 
   return (
     <Screen title="History">
       <View style={styles.stats}>
-        <Stat label="Day streak" value={`${streak} 🔥`} />
+        <Stat label={`${capitalize(info.noun)} streak`} value={`${streak} 🔥`} />
         <Stat label="Avg / day" value={formatMl(average)} />
-        <Stat label="Goal days" value={`${goalDays}/30`} />
+        {period === 'day' ? (
+          <Stat label="Goal days" value={`${goalPeriods}/30`} />
+        ) : (
+          <Stat
+            label={capitalize(info.current)}
+            value={`${Math.min(100, Math.round((current.total / current.goal) * 100))}%`}
+          />
+        )}
       </View>
 
       <Card title="Last 7 days">
         <View style={[styles.chart, { height: CHART_HEIGHT + 24 }]}>
           {week.map((day) => {
-            const met = day.total >= day.goal;
+            const met = day.total >= day.target;
             return (
               <View key={day.key} style={styles.barColumn}>
                 <View style={[styles.barTrack, { height: CHART_HEIGHT }]}>
-                  {/* goal marker */}
+                  {/* daily target marker */}
                   <View
                     style={[
                       styles.goalLine,
-                      { bottom: (day.goal / chartMax) * CHART_HEIGHT, backgroundColor: theme.textSecondary },
+                      { bottom: (day.target / chartMax) * CHART_HEIGHT, backgroundColor: theme.textSecondary },
                     ]}
                   />
                   <View
@@ -70,23 +115,26 @@ export default function HistoryScreen() {
           })}
         </View>
         <ThemedText type="small" themeColor="textSecondary">
-          Green bars reached the goal. The grey line marks each day’s goal.
+          {period === 'day'
+            ? 'Green bars reached the goal. The grey line marks each day’s goal.'
+            : `The grey line is your ${info.label.toLowerCase()} goal spread evenly over the ${info.noun}.`}
         </ThemedText>
       </Card>
 
-      <Card title="Past 30 days">
-        {tracked.length === 0 ? (
+      <Card title={period === 'day' ? 'Past 30 days' : `Recent ${info.noun}s`}>
+        {shownPeriods.length === 0 ? (
           <ThemedText type="small" themeColor="textSecondary">
             Your daily totals will show up here.
           </ThemedText>
         ) : (
-          [...tracked].reverse().map((day) => (
-            <View key={day.key} style={styles.dayRow}>
+          shownPeriods.map((p) => (
+            <View key={p.start.getTime()} style={styles.dayRow}>
               <ThemedText>
-                {day.date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                {periodLabel(p.start, period)}
+                {p === current && period !== 'day' ? ' (now)' : ''}
               </ThemedText>
-              <ThemedText type="smallBold" style={{ color: day.total >= day.goal ? theme.success : theme.text }}>
-                {formatMl(day.total)} / {formatMl(day.goal)}
+              <ThemedText type="smallBold" style={{ color: p.total >= p.goal ? theme.success : theme.text }}>
+                {formatMl(p.total)} / {formatMl(p.goal)}
               </ThemedText>
             </View>
           ))

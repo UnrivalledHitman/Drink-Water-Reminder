@@ -17,7 +17,7 @@ export async function requestPermission() {
   return false;
 }
 
-export async function syncReminders(_settings: Settings) {}
+export async function syncReminders(_settings: Settings, _pausedUntil: Date | null) {}
 
 export async function snooze() {}
 

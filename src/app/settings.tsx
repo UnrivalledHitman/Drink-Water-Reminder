@@ -6,21 +6,21 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
-  clamp,
+  clampGoal,
+  convertGoal,
   formatMinutes,
   formatMl,
+  GOAL_PERIODS,
   goalFromWeight,
-  MAX_GOAL_ML,
-  MIN_GOAL_ML,
+  PERIOD_INFO,
   REMINDER_INTERVALS,
-  reminderTimes,
+  reminderOffsets,
 } from '@/lib/hydration';
 import { remindersSupported, requestPermission, sendTestReminder } from '@/lib/reminders';
 import { useHydration } from '@/state/hydration-store';
 
 const DAY = 24 * 60;
 const TIME_STEP = 30;
-const GOAL_STEP = 100;
 const CUP_STEP = 50;
 
 function shiftTime(minutes: number, delta: number) {
@@ -46,7 +46,10 @@ export default function SettingsScreen() {
 
   const weightKg = Number.parseInt(weight, 10);
   const weightValid = weightKg >= 20 && weightKg <= 250;
-  const reminderCount = reminderTimes(settings).length;
+  const reminderCount = reminderOffsets(settings).length;
+  const period = settings.goalPeriod;
+  const info = PERIOD_INFO[period];
+  const setGoal = (ml: number) => updateSettings({ goalMl: clampGoal(ml, period) });
 
   const toggleReminders = async (on: boolean) => {
     if (on && !(await requestPermission())) {
@@ -66,18 +69,33 @@ export default function SettingsScreen() {
 
   return (
     <Screen title="Settings">
-      <Card title="Daily goal">
+      <Card title="Goal">
+        <View style={styles.chips}>
+          {GOAL_PERIODS.map((p) => (
+            <Chip
+              key={p}
+              label={PERIOD_INFO[p].label}
+              selected={p === period}
+              onPress={() =>
+                p !== period &&
+                updateSettings({ goalPeriod: p, goalMl: convertGoal(settings.goalMl, period, p) })
+              }
+            />
+          ))}
+        </View>
         <Stepper
-          label="Goal"
+          label={`${info.label} goal`}
           value={formatMl(settings.goalMl)}
-          onDecrease={() => updateSettings({ goalMl: clamp(settings.goalMl - GOAL_STEP, MIN_GOAL_ML, MAX_GOAL_ML) })}
-          onIncrease={() => updateSettings({ goalMl: clamp(settings.goalMl + GOAL_STEP, MIN_GOAL_ML, MAX_GOAL_ML) })}
-          canDecrease={settings.goalMl > MIN_GOAL_ML}
-          canIncrease={settings.goalMl < MAX_GOAL_ML}
+          onDecrease={() => setGoal(settings.goalMl - info.step)}
+          onIncrease={() => setGoal(settings.goalMl + info.step)}
+          canDecrease={settings.goalMl > info.min}
+          canIncrease={settings.goalMl < info.max}
         />
         <ThemedText type="small" themeColor="textSecondary">
-          Not sure? A common guide is about 35 ml per kg of body weight. Drink more in hot weather or
-          when you exercise.
+          {period === 'day'
+            ? 'Not sure? A common guide is about 35 ml per kg of body weight a day.'
+            : `Hit the total any time during the ${info.noun}. ${info.noun === 'week' ? 'Weeks start on Monday.' : 'Months follow the calendar.'}`}{' '}
+          Drink more in hot weather or when you exercise.
         </ThemedText>
         <View style={styles.inlineRow}>
           <TextInput
@@ -90,10 +108,10 @@ export default function SettingsScreen() {
             style={[styles.input, { color: theme.text, backgroundColor: theme.background }]}
           />
           <Button
-            label={weightValid ? `Use ${formatMl(goalFromWeight(weightKg))}` : 'Calculate'}
+            label={weightValid ? `Use ${formatMl(goalFromWeight(weightKg, period))}` : 'Calculate'}
             variant="soft"
             disabled={!weightValid}
-            onPress={() => updateSettings({ weightKg, goalMl: goalFromWeight(weightKg) })}
+            onPress={() => updateSettings({ weightKg, goalMl: goalFromWeight(weightKg, period) })}
           />
         </View>
       </Card>
@@ -134,8 +152,9 @@ export default function SettingsScreen() {
             </View>
             <ThemedText type="small" themeColor="textSecondary">
               {reminderCount} reminders a day, from {formatMinutes(settings.wakeMinutes)} to{' '}
-              {formatMinutes(settings.sleepMinutes)}. Tap “I drank a glass” on a reminder to log{' '}
-              {settings.cupSizes[1]} ml.
+              {formatMinutes(settings.sleepMinutes)}. They pause once you reach your {info.label.toLowerCase()} goal and
+              start again {period === 'day' ? 'tomorrow' : `next ${info.noun}`}. Tap “I drank a glass” on a
+              reminder to log {settings.cupSizes[1]} ml.
             </ThemedText>
             <Button label="Send a test reminder" variant="soft" onPress={testReminder} />
           </>

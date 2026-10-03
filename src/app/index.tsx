@@ -9,12 +9,17 @@ import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
   dateKey,
-  formatMinutes,
   formatMl,
   formatTime,
-  goalForDay,
-  nextReminder,
+  formatWhen,
+  PERIOD_INFO,
+  periodDates,
+  periodGoal,
+  periodTotal,
+  remindersPausedUntil,
+  startOfDay,
   totalMl,
+  upcomingReminders,
 } from '@/lib/hydration';
 import { remindersSupported } from '@/lib/reminders';
 import { useHydration } from '@/state/hydration-store';
@@ -27,12 +32,22 @@ export default function TodayScreen() {
   const theme = useTheme();
   const [custom, setCustom] = useState('');
 
+  const { settings } = data;
+  const period = settings.goalPeriod;
+  const info = PERIOD_INFO[period];
   const today = dateKey(now);
   const entries = data.log[today] ?? [];
-  const drank = totalMl(entries);
-  const goal = goalForDay(data, today);
+  const drankToday = totalMl(entries);
+  const drank = periodTotal(data, now, period);
+  const goal = periodGoal(data, now, period);
   const remaining = Math.max(0, goal - drank);
-  const next = nextReminder(data.settings, now);
+  const daysLeft = periodDates(now, period).filter((day) => day >= startOfDay(now)).length;
+  const pausedUntil = remindersPausedUntil(data, now);
+  const next = upcomingReminders(settings, now, pausedUntil, 1)[0];
+
+  let status = `${formatMl(remaining)} to go`;
+  if (remaining === 0) status = `${info.label} goal reached — nice work! 🎉`;
+  else if (daysLeft > 1) status += ` · about ${formatMl(remaining / daysLeft)} a day`;
 
   const customMl = Number.parseInt(custom, 10);
   const customValid = customMl > 0 && customMl <= MAX_CUSTOM_ML;
@@ -48,19 +63,24 @@ export default function TodayScreen() {
         <ProgressRing progress={goal > 0 ? drank / goal : 0}>
           <ThemedText type="subtitle">{formatMl(drank)}</ThemedText>
           <ThemedText type="small" themeColor="textSecondary">
-            of {formatMl(goal)}
+            of {formatMl(goal)} {info.current}
           </ThemedText>
         </ProgressRing>
-        <ThemedText style={styles.status}>
-          {remaining > 0 ? `${formatMl(remaining)} to go` : 'Goal reached — nice work! 🎉'}
-        </ThemedText>
+        <ThemedText style={styles.status}>{status}</ThemedText>
+        {period !== 'day' && (
+          <ThemedText type="small" themeColor="textSecondary">
+            Today: {formatMl(drankToday)}
+          </ThemedText>
+        )}
         {remindersSupported &&
-          (next !== null ? (
-            <ThemedText type="small" themeColor="textSecondary">
-              Next reminder at {formatMinutes(next)}
-            </ThemedText>
-          ) : (
+          (!settings.remindersEnabled ? (
             <Button label="Turn on reminders" variant="soft" onPress={() => router.navigate('/settings')} />
+          ) : (
+            next && (
+              <ThemedText type="small" themeColor="textSecondary">
+                {pausedUntil ? 'Reminders paused until' : 'Next reminder'} {formatWhen(next, now)}
+              </ThemedText>
+            )
           ))}
       </View>
 

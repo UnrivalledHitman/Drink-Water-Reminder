@@ -1,12 +1,14 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import { reminderTimes, type Settings } from '@/lib/hydration';
+import { upcomingReminders, type Settings } from '@/lib/hydration';
 
 const CHANNEL_ID = 'water-reminders';
 const CATEGORY_ID = 'water-reminder';
 const SNOOZE_ID = 'snooze';
 const SNOOZE_MINUTES = 10;
+/** iOS keeps at most 64 pending notifications (leave room for a snooze); Android allows ~500. */
+const MAX_SCHEDULED = Platform.OS === 'ios' ? 60 : 250;
 
 export const ACTION_LOG_DRINK = 'log-drink';
 export const ACTION_SNOOZE = 'snooze';
@@ -85,8 +87,34 @@ function content(index: number): Notifications.NotificationContentInput {
   };
 }
 
-/** Replace all scheduled reminders with ones matching the settings. */
-export async function syncReminders(settings: Settings) {
+/**
+ * Replace all scheduled reminders with one-off reminders for the coming days,
+ * skipping any time before `pausedUntil` (set once the goal for the period is met).
+ * One-off reminders, unlike repeating ones, can skip a day; the app tops them
+ * up every time it's opened.
+ */
+export function syncReminders(settings: Settings, pausedUntil: Date | null) {
+  // Run one sync at a time, finishing with the latest request; overlapping
+  // cancel-then-schedule passes would leave duplicate reminders.
+  nextSync = [settings, pausedUntil];
+  syncing ??= (async () => {
+    try {
+      while (nextSync) {
+        const args = nextSync;
+        nextSync = null;
+        await replaceReminders(...args);
+      }
+    } finally {
+      syncing = null;
+    }
+  })();
+  return syncing;
+}
+
+let nextSync: [Settings, Date | null] | null = null;
+let syncing: Promise<void> | null = null;
+
+async function replaceReminders(settings: Settings, pausedUntil: Date | null) {
   await setup();
   // Keep a pending snooze; it may have been scheduled moments ago.
   const scheduled = await Notifications.getAllScheduledNotificationsAsync();
@@ -97,15 +125,17 @@ export async function syncReminders(settings: Settings) {
   );
   if (!settings.remindersEnabled || !(await hasPermission())) return;
 
-  const times = reminderTimes(settings);
+  const times = upcomingReminders(settings, new Date(), pausedUntil, MAX_SCHEDULED);
   await Promise.all(
-    times.map((minutes, index) =>
+    times.map((date, index) =>
       Notifications.scheduleNotificationAsync({
-        content: content(index),
+        content:
+          index === times.length - 1 && times.length === MAX_SCHEDULED
+            ? { ...content(index), body: 'Open the app to keep your water reminders coming.' }
+            : content(index),
         trigger: {
-          type: Notifications.SchedulableTriggerInputTypes.DAILY,
-          hour: Math.floor(minutes / 60),
-          minute: minutes % 60,
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date,
           channelId: CHANNEL_ID,
         },
       })
