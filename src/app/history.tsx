@@ -1,7 +1,8 @@
 import { StyleSheet, View } from 'react-native';
 
-import { Card, Screen } from '@/components/controls';
+import { Button, Card, Screen } from '@/components/controls';
 import { ThemedText } from '@/components/themed-text';
+import { FREE_HISTORY_DAYS } from '@/constants/monetization';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -18,6 +19,7 @@ import {
   totalMl,
 } from '@/lib/hydration';
 import { useHydration } from '@/state/hydration-store';
+import { usePremium } from '@/state/premium-store';
 
 const CHART_HEIGHT = 140;
 const RECENT_PERIODS: Record<GoalPeriod, number> = { day: 30, week: 8, month: 6 };
@@ -38,6 +40,9 @@ function periodLabel(start: Date, period: GoalPeriod) {
 
 export default function HistoryScreen() {
   const { data, now } = useHydration();
+  const { isPremium, showPaywall } = usePremium();
+  // Free users see the last week; Premium sees 30 days and past weeks/months.
+  const statDays = isPremium ? 30 : FREE_HISTORY_DAYS;
   const theme = useTheme();
   const period = data.settings.goalPeriod;
   const info = PERIOD_INFO[period];
@@ -47,8 +52,8 @@ export default function HistoryScreen() {
     return { date, key: dateKey(date), total: totalMl(data.log[dateKey(date)]), target: dailyTarget(data, date) };
   });
 
-  const month = Array.from({ length: 30 }, (_, i) => totalMl(data.log[dateKey(addDays(now, -i))]));
-  const tracked = month.filter((total) => total > 0);
+  const recentDays = Array.from({ length: statDays }, (_, i) => totalMl(data.log[dateKey(addDays(now, -i))]));
+  const tracked = recentDays.filter((total) => total > 0);
   const average = tracked.length ? Math.round(tracked.reduce((a, b) => a + b, 0) / tracked.length) : 0;
 
   // Most recent first: this period, then the ones before it.
@@ -61,7 +66,7 @@ export default function HistoryScreen() {
     });
   }
   const current = periods[0];
-  const goalPeriods = periods.filter((p) => p.total >= p.goal).length;
+  const goalDays = periods.slice(0, statDays).filter((p) => p.total >= p.goal).length;
   // Skip empty periods, but always show the current week or month.
   const shownPeriods = periods.filter((p) => p.total > 0 || (p === current && period !== 'day'));
 
@@ -74,7 +79,7 @@ export default function HistoryScreen() {
         <Stat label={`${capitalize(info.noun)} streak`} value={`${streak} 🔥`} />
         <Stat label="Avg / day" value={formatMl(average)} />
         {period === 'day' ? (
-          <Stat label="Goal days" value={`${goalPeriods}/30`} />
+          <Stat label="Goal days" value={`${goalDays}/${statDays}`} />
         ) : (
           <Stat
             label={capitalize(info.current)}
@@ -121,25 +126,38 @@ export default function HistoryScreen() {
         </ThemedText>
       </Card>
 
-      <Card title={period === 'day' ? 'Past 30 days' : `Recent ${info.noun}s`}>
-        {shownPeriods.length === 0 ? (
+      {!isPremium ? (
+        <Card title="Full history">
           <ThemedText type="small" themeColor="textSecondary">
-            Your daily totals will show up here.
+            See 30-day stats, every day’s total, and how your past weeks and months went with Premium.
           </ThemedText>
-        ) : (
-          shownPeriods.map((p) => (
-            <View key={p.start.getTime()} style={styles.dayRow}>
-              <ThemedText>
-                {periodLabel(p.start, period)}
-                {p === current && period !== 'day' ? ' (now)' : ''}
-              </ThemedText>
-              <ThemedText type="smallBold" style={{ color: p.total >= p.goal ? theme.success : theme.text }}>
-                {formatMl(p.total)} / {formatMl(p.goal)}
-              </ThemedText>
-            </View>
-          ))
-        )}
-      </Card>
+          <Button
+            label="Unlock full history"
+            variant="soft"
+            onPress={() => showPaywall('Full history is part of Premium.')}
+          />
+        </Card>
+      ) : (
+        <Card title={period === 'day' ? 'Past 30 days' : `Recent ${info.noun}s`}>
+          {shownPeriods.length === 0 ? (
+            <ThemedText type="small" themeColor="textSecondary">
+              Your daily totals will show up here.
+            </ThemedText>
+          ) : (
+            shownPeriods.map((p) => (
+              <View key={p.start.getTime()} style={styles.dayRow}>
+                <ThemedText>
+                  {periodLabel(p.start, period)}
+                  {p === current && period !== 'day' ? ' (now)' : ''}
+                </ThemedText>
+                <ThemedText type="smallBold" style={{ color: p.total >= p.goal ? theme.success : theme.text }}>
+                  {formatMl(p.total)} / {formatMl(p.goal)}
+                </ThemedText>
+              </View>
+            ))
+          )}
+        </Card>
+      )}
     </Screen>
   );
 }

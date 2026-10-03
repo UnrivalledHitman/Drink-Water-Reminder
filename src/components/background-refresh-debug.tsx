@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 
-import { Button, Card } from '@/components/controls';
+import { Button } from '@/components/controls';
 import { ThemedText } from '@/components/themed-text';
 import { formatWhen } from '@/lib/hydration';
 import { lastBackgroundRefresh, runBackgroundRefreshForTesting } from '@/lib/reminder-refresh';
@@ -12,7 +12,7 @@ function loadInfo() {
 }
 
 /**
- * Development builds only: shows whether the background refresh has run and
+ * Development builds only (inside the Developer card): shows whether the background refresh has run and
  * lets you trigger it on demand. Hidden in release builds.
  */
 export function BackgroundRefreshDebug({ remindersEnabled }: { remindersEnabled: boolean }) {
@@ -50,7 +50,7 @@ export function BackgroundRefreshDebug({ remindersEnabled }: { remindersEnabled:
   };
 
   return (
-    <Card title="Developer">
+    <>
       <ThemedText type="small" themeColor="textSecondary">
         Last background refresh: {lastRun ? formatWhen(lastRun, new Date()) : 'never'}
         {'\n'}Pending reminders: {pending ?? '…'}
@@ -66,6 +66,6 @@ export function BackgroundRefreshDebug({ remindersEnabled }: { remindersEnabled:
           Turn reminders on first; the background task is only registered while they’re on.
         </ThemedText>
       )}
-    </Card>
+    </>
   );
 }

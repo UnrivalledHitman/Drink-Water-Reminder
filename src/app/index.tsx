@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 
+import { AdBanner } from '@/components/ad-banner';
 import { Button, Card, Screen } from '@/components/controls';
 import { ProgressRing } from '@/components/progress-ring';
 import { ThemedText } from '@/components/themed-text';
@@ -143,6 +144,8 @@ export default function TodayScreen() {
           ))
         )}
       </Card>
+
+      <AdBanner />
     </Screen>
   );
 }

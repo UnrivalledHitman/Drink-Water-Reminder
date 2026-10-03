@@ -3,6 +3,7 @@ import { Alert, Linking, StyleSheet, Switch, TextInput, View } from 'react-nativ
 
 import { BackgroundRefreshDebug } from '@/components/background-refresh-debug';
 import { Button, Card, Chip, controlStyles, Screen, Stepper } from '@/components/controls';
+import { PremiumCard } from '@/components/premium-card';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -20,6 +21,7 @@ import {
 import { backgroundRefreshAvailable } from '@/lib/reminder-refresh';
 import { remindersSupported, requestPermission, sendTestReminder } from '@/lib/reminders';
 import { useHydration } from '@/state/hydration-store';
+import { usePremium } from '@/state/premium-store';
 
 const DAY = 24 * 60;
 const TIME_STEP = 30;
@@ -43,6 +45,7 @@ function permissionDenied() {
 export default function SettingsScreen() {
   const { data, updateSettings } = useHydration();
   const { settings } = data;
+  const { isPremium, showPaywall, simulatePremium, setSimulatePremium } = usePremium();
   const theme = useTheme();
   const [weight, setWeight] = useState(settings.weightKg ? String(settings.weightKg) : '');
   const [backgroundOk, setBackgroundOk] = useState(true);
@@ -75,19 +78,26 @@ export default function SettingsScreen() {
 
   return (
     <Screen title="Settings">
+      <PremiumCard />
+
       <Card title="Goal">
         <View style={styles.chips}>
-          {GOAL_PERIODS.map((p) => (
-            <Chip
-              key={p}
-              label={PERIOD_INFO[p].label}
-              selected={p === period}
-              onPress={() =>
-                p !== period &&
-                updateSettings({ goalPeriod: p, goalMl: convertGoal(settings.goalMl, period, p) })
-              }
-            />
-          ))}
+          {GOAL_PERIODS.map((p) => {
+            const locked = p !== 'day' && !isPremium;
+            return (
+              <Chip
+                key={p}
+                label={locked ? `${PERIOD_INFO[p].label} 🔒` : PERIOD_INFO[p].label}
+                selected={p === period}
+                onPress={() => {
+                  if (locked) showPaywall('Weekly and monthly goals are part of Premium.');
+                  else if (p !== period) {
+                    updateSettings({ goalPeriod: p, goalMl: convertGoal(settings.goalMl, period, p) });
+                  }
+                }}
+              />
+            );
+          })}
         </View>
         <Stepper
           label={`${info.label} goal`}
@@ -196,8 +206,14 @@ export default function SettingsScreen() {
         ))}
       </Card>
 
-      {__DEV__ && remindersSupported && (
-        <BackgroundRefreshDebug remindersEnabled={settings.remindersEnabled} />
+      {__DEV__ && (
+        <Card title="Developer">
+          <View style={controlStyles.row}>
+            <ThemedText>Simulate Premium</ThemedText>
+            <Switch value={simulatePremium} onValueChange={setSimulatePremium} trackColor={{ true: theme.tint }} />
+          </View>
+          {remindersSupported && <BackgroundRefreshDebug remindersEnabled={settings.remindersEnabled} />}
+        </Card>
       )}
     </Screen>
   );

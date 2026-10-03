@@ -41,7 +41,16 @@
           "color": "#1E88E5"
         }
       ],
-      "expo-background-task"
+      "expo-background-task",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511",
+          "delayAppMeasurementInit": true,
+          "userTrackingUsageDescription": "This lets us show ads that are more relevant to you. You can still use the app if you decline."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

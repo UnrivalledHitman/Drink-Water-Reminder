@@ -4,8 +4,10 @@ import { useEffect, useRef } from 'react';
 import { useColorScheme } from 'react-native';
 
 import AppTabs from '@/components/app-tabs';
+import { convertGoal } from '@/lib/hydration';
 import { ACTION_LOG_DRINK, ACTION_SNOOZE, snooze, subscribeToReminderActions } from '@/lib/reminders';
 import { HydrationProvider, useHydration } from '@/state/hydration-store';
+import { PremiumProvider, usePremium } from '@/state/premium-store';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -15,10 +17,13 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <HydrationProvider onLoaded={hideSplash}>
-        <ReminderActions />
-        <AppTabs />
-      </HydrationProvider>
+      <PremiumProvider>
+        <HydrationProvider onLoaded={hideSplash}>
+          <ReminderActions />
+          <PremiumGoalGuard />
+          <AppTabs />
+        </HydrationProvider>
+      </PremiumProvider>
     </ThemeProvider>
   );
 }
@@ -39,6 +44,21 @@ function ReminderActions() {
       }),
     []
   );
+
+  return null;
+}
+
+/** Weekly and monthly goals are Premium; if Premium ends, switch back to the matching daily goal. */
+function PremiumGoalGuard() {
+  const { status } = usePremium();
+  const { data, updateSettings } = useHydration();
+  const { goalPeriod, goalMl } = data.settings;
+
+  useEffect(() => {
+    if (status === 'free' && goalPeriod !== 'day') {
+      updateSettings({ goalPeriod: 'day', goalMl: convertGoal(goalMl, goalPeriod, 'day') });
+    }
+  }, [status, goalPeriod, goalMl, updateSettings]);
 
   return null;
 }

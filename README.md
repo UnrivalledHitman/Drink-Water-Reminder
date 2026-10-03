@@ -31,6 +31,26 @@ All data is stored on the device.
 
 Reminders need a phone (Android or iOS). The web version is handy for working on the UI, but it can't send notifications.
 
+## Free and Premium
+
+| | Free | Premium |
+|---|---|---|
+| Daily goal, reminders, logging, streak | ✓ | ✓ |
+| History | Last 7 days | 30-day stats, past weeks and months |
+| Weekly and monthly goals | — | ✓ |
+| Ads | Banner on the Today screen | None |
+
+Ads use Google AdMob (`react-native-google-mobile-ads`); purchases use RevenueCat (`react-native-purchases`). Neither works in Expo Go (ads show a placeholder there), so test them in a development build (`npx eas-cli@latest build --profile development`). In development builds, **Settings → Developer → Simulate Premium** unlocks Premium without buying it.
+
+To set up for release:
+
+1. **AdMob**: create the app in [AdMob](https://admob.google.com), then replace the sample `androidAppId` / `iosAppId` in `app.json` (they're Google's test IDs) and set the banner ad unit IDs in `.env.local`. Set up the GDPR consent message (and optionally the iOS ATT message) under **Privacy & messaging**; the app shows it automatically.
+2. **Products**: create the subscriptions (e.g. monthly, yearly) and/or a lifetime purchase in Google Play Console and App Store Connect.
+3. **RevenueCat**: connect both stores, create an entitlement named `premium`, attach the products, and add them to the **current offering**. Put the public SDK keys in `.env.local`.
+4. Add your privacy policy and terms URLs to `.env.local`; both stores require them for subscriptions.
+
+See `.env.example` for all settings.
+
 ## Project layout
 
 - `src/app/` — screens (file-based routing with Expo Router)
