@@ -19,6 +19,10 @@ export async function requestPermission() {
 
 export async function syncReminders(_settings: Settings, _pausedUntil: Date | null) {}
 
+export async function pendingReminderCount() {
+  return 0;
+}
+
 export async function snooze() {}
 
 export async function sendTestReminder() {

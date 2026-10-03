@@ -143,6 +143,12 @@ async function replaceReminders(settings: Settings, pausedUntil: Date | null) {
   );
 }
 
+/** Reminders waiting to be delivered, not counting a snooze. */
+export async function pendingReminderCount() {
+  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+  return scheduled.filter((request) => request.identifier !== SNOOZE_ID).length;
+}
+
 export async function snooze() {
   await setup();
   await Notifications.scheduleNotificationAsync({

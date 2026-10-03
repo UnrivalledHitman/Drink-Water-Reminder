@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Alert, Linking, StyleSheet, Switch, TextInput, View } from 'react-native';
 
+import { BackgroundRefreshDebug } from '@/components/background-refresh-debug';
 import { Button, Card, Chip, controlStyles, Screen, Stepper } from '@/components/controls';
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
@@ -194,6 +195,10 @@ export default function SettingsScreen() {
           />
         ))}
       </Card>
+
+      {__DEV__ && remindersSupported && (
+        <BackgroundRefreshDebug remindersEnabled={settings.remindersEnabled} />
+      )}
     </Screen>
   );
 }
